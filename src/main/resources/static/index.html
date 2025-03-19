@@ -1,0 +1,55 @@
+<!-- src/main/resources/static/index.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chat Application</title>
+    <!-- Include SockJS and StompJS libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs/lib/stomp.min.js"></script>
+</head>
+<body>
+    <div>
+        <h1>Chat Room</h1>
+        <div id="chatWindow" style="border:1px solid #ccc; height:300px; overflow:auto;"></div>
+        <input type="text" id="messageInput" placeholder="Type a message..." />
+        <button onclick="sendMessage()">Send</button>
+    </div>
+    <script>
+        var stompClient = null;
+        // This should be set dynamically (e.g., from URL or chat selection)
+        var chatCode = "replace_with_chat_code";
+
+        function connect() {
+            var socket = new SockJS('/ws');
+            stompClient = Stomp.over(socket);
+            stompClient.connect({}, function (frame) {
+                console.log('Connected: ' + frame);
+                // Subscribe to the chat topic
+                stompClient.subscribe('/topic/chat/' + chatCode, function (message) {
+                    showMessage(JSON.parse(message.body));
+                });
+            });
+        }
+
+        function sendMessage() {
+            var messageContent = document.getElementById('messageInput').value;
+            stompClient.send("/app/chat.sendMessage", {}, JSON.stringify({
+                chatCode: chatCode,
+                content: messageContent,
+                sender: "username" // Replace with the actual username as needed
+            }));
+            document.getElementById('messageInput').value = '';
+        }
+
+        function showMessage(message) {
+            var chatWindow = document.getElementById('chatWindow');
+            var messageElement = document.createElement('p');
+            messageElement.textContent = message.sender + ": " + message.content;
+            chatWindow.appendChild(messageElement);
+        }
+
+        // Connect to the WebSocket as soon as the page loads
+        connect();
+    </script>
+</body>
+</html>
