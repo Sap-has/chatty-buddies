@@ -1,0 +1,80 @@
+<!-- src/main/resources/templates/dashboard.html -->
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" 
+      th:replace="~{layout/main :: layout(~{::title}, ~{::section})}">
+<head>
+    <title>Dashboard - ChattyBuddies</title>
+</head>
+<body>
+    <section class="dashboard">
+        <div class="dashboard-header">
+            <h2>My Chats</h2>
+            <a th:href="@{/chats/new}" class="btn primary">Create New Chat</a>
+        </div>
+        
+        <!-- Pending Invitations -->
+        <div th:if="${!pendingInvitations.empty}" class="card invitations-card">
+            <h3>Pending Invitations</h3>
+            <div class="invitation-list">
+                <div th:each="invitation : ${pendingInvitations}" class="invitation-item">
+                    <div class="invitation-details">
+                        <span class="invitation-name" th:text="${invitation.chat.chatName}"></span>
+                        <span class="invitation-host">from <span th:text="${invitation.inviter.username}"></span></span>
+                    </div>
+                    <div class="invitation-actions">
+                        <form th:action="@{/api/chat/invitation/{id}/accept(id=${invitation.id})}" method="post">
+                            <button type="submit" class="btn small success">Accept</button>
+                        </form>
+                        <form th:action="@{/api/chat/invitation/{id}/decline(id=${invitation.id})}" method="post">
+                            <button type="submit" class="btn small danger">Decline</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Chats as Host -->
+        <div class="card chats-card">
+            <h3>Chats I Host</h3>
+            <div th:if="${hostedChats.empty}" class="empty-state">
+                <p>You aren't hosting any chats yet.</p>
+                <a th:href="@{/chats/new}" class="btn small">Create a Chat</a>
+            </div>
+            <div th:unless="${hostedChats.empty}" class="chat-list">
+                <div th:each="chat : ${hostedChats}" class="chat-item">
+                    <div class="chat-details">
+                        <a th:href="@{/chats/{code}(code=${chat.chatCode})}" class="chat-name" th:text="${chat.chatName}"></a>
+                        <span class="chat-meta" th:text="${chat.members.size()} + ' members'"></span>
+                    </div>
+                    <div class="chat-actions">
+                        <a th:href="@{/chats/{id}/edit(id=${chat.id})}" class="btn small secondary">Edit</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Chats as Member -->
+        <div class="card chats-card">
+            <h3>Chats I'm In</h3>
+            <div th:if="${userChats.empty}" class="empty-state">
+                <p>You aren't in any chats yet.</p>
+            </div>
+            <div th:unless="${userChats.empty}" class="chat-list">
+                <div th:each="chat : ${userChats}" class="chat-item">
+                    <div class="chat-details">
+                        <a th:href="@{/chats/{code}(code=${chat.chatCode})}" class="chat-name" th:text="${chat.chatName}"></a>
+                        <span class="chat-meta">
+                            Host: <span th:text="${chat.host.username}"></span>
+                        </span>
+                    </div>
+                    <div class="chat-actions" th:if="${chat.host.username != #authentication.name}">
+                        <form th:action="@{/api/chat/{id}/leave(id=${chat.id})}" method="post">
+                            <button type="submit" class="btn small outline">Leave</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+</body>
+</html>

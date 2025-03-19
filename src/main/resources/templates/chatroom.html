@@ -1,0 +1,136 @@
+<!-- src/main/resources/templates/chatroom.html -->
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" 
+      th:replace="~{layout/main :: layout(~{::title}, ~{::section})}">
+<head>
+    <title th:text="${chat.chatName} + ' - ChattyBuddies'">Chat Room</title>
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs/lib/stomp.min.js"></script>
+</head>
+<body>
+    <section class="chatroom">
+        <div class="chat-header">
+            <div class="chat-info">
+                <h2 th:text="${chat.chatName}">Chat Name</h2>
+                <span class="chat-code">Code: <span th:text="${chat.chatCode}"></span></span>
+            </div>
+            <div class="chat-actions" th:if="${isHost}">
+                <a th:href="@{/chats/{id}/edit(id=${chat.id})}" class="btn secondary">Manage Chat</a>
+            </div>
+        </div>
+        
+        <div class="chat-container">
+            <div class="members-sidebar">
+                <h3>Members (<span th:text="${chat.members.size()}"></span>)</h3>
+                <ul class="member-list">
+                    <li th:each="member : ${chat.members}" 
+                        th:class="${member.id == chat.host.id ? 'member host' : 'member'}">
+                        <span th:text="${member.username}"></span>
+                        <span class="host-badge" th:if="${member.id == chat.host.id}">Host</span>
+                        <span class="you-badge" th:if="${member.id == currentUser.id}">You</span>
+                    </li>
+                </ul>
+            </div>
+            
+            <div class="message-area">
+                <div id="messageContainer" class="message-container">
+                    <!-- Messages will be populated here by JavaScript -->
+                </div>
+                
+                <div class="message-input">
+                    <form id="messageForm" class="message-form">
+                        <input type="text" id="messageInput" placeholder="Type a message..." autocomplete="off">
+                        <button type="submit" class="btn primary">Send</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <script th:inline="javascript">
+        // Current user and chat information
+        const currentUsername = '[[${currentUser.username}]]';
+        const chatCode = '[[${chat.chatCode}]]';
+        let stompClient = null;
+        
+        // Connect to WebSocket
+        function connect() {
+            const socket = new SockJS('/ws');
+            stompClient = Stomp.over(socket);
+            stompClient.connect({}, function(frame) {
+                console.log('Connected to WebSocket: ' + frame);
+                
+                // Subscribe to the chat topic
+                stompClient.subscribe('/topic/chat/' + chatCode, function(message) {
+                    showMessage(JSON.parse(message.body));
+                });
+                
+                // Show connection established message
+                const messageContainer = document.getElementById('messageContainer');
+                const connectionMessage = document.createElement('div');
+                connectionMessage.className = 'system-message';
+                connectionMessage.textContent = 'Connected to chat room!';
+                messageContainer.appendChild(connectionMessage);
+            }, function(error) {
+                console.error('Error connecting to WebSocket:', error);
+                const messageContainer = document.getElementById('messageContainer');
+                const errorMessage = document.createElement('div');
+                errorMessage.className = 'system-message error';
+                errorMessage.textContent = 'Failed to connect. Please refresh the page to try again.';
+                messageContainer.appendChild(errorMessage);
+            });
+        }
+        
+        // Send message function
+        function sendMessage(event) {
+            event.preventDefault();
+            const messageInput = document.getElementById('messageInput');
+            const messageContent = messageInput.value.trim();
+            
+            if (messageContent) {
+                const chatMessage = {
+                    chatCode: chatCode,
+                    sender: currentUsername,
+                    content: messageContent
+                };
+                stompClient.send("/app/chat.sendMessage", {}, JSON.stringify(chatMessage));
+                messageInput.value = '';
+            }
+        }
+        
+        // Display message in the UI
+        function showMessage(message) {
+            const messageContainer = document.getElementById('messageContainer');
+            const messageElement = document.createElement('div');
+            
+            const isCurrentUser = message.sender === currentUsername;
+            messageElement.className = isCurrentUser ? 'message self' : 'message other';
+            
+            const messageContent = document.createElement('div');
+            messageContent.className = 'message-content';
+            
+            const senderElement = document.createElement('div');
+            senderElement.className = 'message-sender';
+            senderElement.textContent = isCurrentUser ? 'You' : message.sender;
+            
+            const textElement = document.createElement('div');
+            textElement.className = 'message-text';
+            textElement.textContent = message.content;
+            
+            messageContent.appendChild(senderElement);
+            messageContent.appendChild(textElement);
+            messageElement.appendChild(messageContent);
+            messageContainer.appendChild(messageElement);
+            
+            // Scroll to the bottom
+            messageContainer.scrollTop = messageContainer.scrollHeight;
+        }
+        
+        // Initialize on page load
+        window.onload = function() {
+            connect();
+            document.getElementById('messageForm').addEventListener('submit', sendMessage);
+        };
+    </script>
+</body>
+</html>

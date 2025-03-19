@@ -1,0 +1,51 @@
+<!-- src/main/resources/templates/new-chat.html -->
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" 
+      th:replace="~{layout/main :: layout(~{::title}, ~{::section})}">
+<head>
+    <title>Create New Chat - ChattyBuddies</title>
+</head>
+<body>
+    <section class="form-page">
+        <h2>Create New Chat</h2>
+        <form id="createChatForm" class="standard-form">
+            <div class="form-group">
+                <label for="chatName">Chat Name</label>
+                <input type="text" id="chatName" name="chatName" required>
+            </div>
+            <div class="form-actions">
+                <a th:href="@{/chats}" class="btn secondary">Cancel</a>
+                <button type="submit" class="btn primary">Create Chat</button>
+            </div>
+        </form>
+    </section>
+    
+    <script>
+        document.getElementById('createChatForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const chatName = document.getElementById('chatName').value;
+            
+            fetch('/api/chat/create?chatName=' + encodeURIComponent(chatName), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to create chat');
+                }
+                return response.json();
+            })
+            .then(data => {
+                window.location.href = '/chats/' + data.chatCode;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Failed to create chat. Please try again.');
+            });
+        });
+    </script>
+</body>
+</html>
