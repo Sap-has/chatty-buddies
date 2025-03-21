@@ -1,136 +1,225 @@
-<!-- src/main/resources/templates/chatroom.html -->
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" 
-      th:replace="~{layout/main :: layout(~{::title}, ~{::section})}">
+<html xmlns:th="http://www.thymeleaf.org">
 <head>
-    <title th:text="${chat.chatName} + ' - ChattyBuddies'">Chat Room</title>
-    <script src="https://cdn.jsdelivr.net/npm/sockjs-client/dist/sockjs.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/stompjs/lib/stomp.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${chat.chatName} + ' - ChattyBuddies'"></title>
+    <link rel="stylesheet" th:href="@{/css/styles.css}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.5.1/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
 </head>
-<body>
-    <section class="chatroom">
-        <div class="chat-header">
-            <div class="chat-info">
-                <h2 th:text="${chat.chatName}">Chat Name</h2>
-                <span class="chat-code">Code: <span th:text="${chat.chatCode}"></span></span>
+<body class="chatroom-page">
+    <div class="app-container">
+        <header>
+            <h1>ChattyBuddies</h1>
+            <div class="user-menu">
+                <span th:text="${#authentication.name}"></span>
+                <a th:href="@{/logout}" class="btn btn-logout">Logout</a>
             </div>
-            <div class="chat-actions" th:if="${isHost}">
-                <a th:href="@{/chats/{id}/edit(id=${chat.id})}" class="btn secondary">Manage Chat</a>
-            </div>
-        </div>
+        </header>
         
-        <div class="chat-container">
-            <div class="members-sidebar">
-                <h3>Members (<span th:text="${chat.members.size()}"></span>)</h3>
-                <ul class="member-list">
-                    <li th:each="member : ${chat.members}" 
-                        th:class="${member.id == chat.host.id ? 'member host' : 'member'}">
-                        <span th:text="${member.username}"></span>
-                        <span class="host-badge" th:if="${member.id == chat.host.id}">Host</span>
-                        <span class="you-badge" th:if="${member.id == currentUser.id}">You</span>
-                    </li>
-                </ul>
-            </div>
-            
-            <div class="message-area">
-                <div id="messageContainer" class="message-container">
-                    <!-- Messages will be populated here by JavaScript -->
+        <div class="chatroom-container">
+            <div class="chatroom-sidebar">
+                <div class="chat-info">
+                    <h2 th:text="${chat.chatName}"></h2>
+                    <div class="chat-code">Chat Code: <span th:text="${chat.chatCode}"></span></div>
+                    <div class="chat-actions">
+                        <a th:href="@{/chats}" class="btn">Back to Chats</a>
+                        <a th:if="${isHost}" th:href="@{/chats/{id}/edit(id=${chat.id})}" class="btn btn-edit">Edit Chat</a>
+                        <button th:unless="${isHost}" id="leaveChatBtn" class="btn btn-leave">Leave Chat</button>
+                    </div>
                 </div>
                 
+                <div class="members-panel">
+                    <h3>Members</h3>
+                    <ul class="members-list">
+                        <li th:each="member : ${chat.members}" 
+                            th:class="${member.username == currentUser.username ? 'current-user' : ''}">
+                            <span th:text="${member.username}"></span>
+                            <span class="host-badge" th:if="${member.id == chat.host.id}">Host</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="chat-panel">
+                <div id="messageArea" class="message-area"></div>
+                
                 <div class="message-input">
-                    <form id="messageForm" class="message-form">
-                        <input type="text" id="messageInput" placeholder="Type a message..." autocomplete="off">
-                        <button type="submit" class="btn primary">Send</button>
+                    <form id="messageForm">
+                        <input type="text" id="message" placeholder="Type your message..." autocomplete="off">
+                        <button type="submit" class="btn btn-send">Send</button>
                     </form>
                 </div>
             </div>
         </div>
-    </section>
+    </div>
+    
+    <div id="leaveConfirmModal" class="modal">
+        <div class="modal-content">
+            <h3>Leave Chat</h3>
+            <p>Are you sure you want to leave this chat?</p>
+            <div class="modal-actions">
+                <button id="confirmLeave" class="btn btn-danger">Leave</button>
+                <button id="cancelLeave" class="btn">Cancel</button>
+            </div>
+        </div>
+    </div>
     
     <script th:inline="javascript">
-        // Current user and chat information
-        const currentUsername = '[[${currentUser.username}]]';
-        const chatCode = '[[${chat.chatCode}]]';
-        let stompClient = null;
-        
-        // Connect to WebSocket
-        function connect() {
-            const socket = new SockJS('/ws');
-            stompClient = Stomp.over(socket);
-            stompClient.connect({}, function(frame) {
-                console.log('Connected to WebSocket: ' + frame);
+        document.addEventListener('DOMContentLoaded', function() {
+            const messageForm = document.getElementById('messageForm');
+            const messageInput = document.getElementById('message');
+            const messageArea = document.getElementById('messageArea');
+            const leaveChatBtn = document.getElementById('leaveChatBtn');
+            const leaveConfirmModal = document.getElementById('leaveConfirmModal');
+            const confirmLeave = document.getElementById('confirmLeave');
+            const cancelLeave = document.getElementById('cancelLeave');
+            
+            const chatCode = [[${chat.chatCode}]];
+            const chatId = [[${chat.id}]];
+            const username = [[${#authentication.name}]];
+            
+            let stompClient = null;
+            
+            // Connect to WebSocket
+            function connect() {
+                const socket = new SockJS('/ws');
+                stompClient = Stomp.over(socket);
                 
-                // Subscribe to the chat topic
-                stompClient.subscribe('/topic/chat/' + chatCode, function(message) {
-                    showMessage(JSON.parse(message.body));
+                stompClient.connect({}, function(frame) {
+                    console.log('Connected: ' + frame);
+                    
+                    // Subscribe to chat channel
+                    stompClient.subscribe('/topic/chat/' + chatCode, function(response) {
+                        const message = JSON.parse(response.body);
+                        displayMessage(message);
+                    });
+                    
+                    // Send a system message that user has joined
+                    addSystemMessage(username + ' joined the chat');
                 });
-                
-                // Show connection established message
-                const messageContainer = document.getElementById('messageContainer');
-                const connectionMessage = document.createElement('div');
-                connectionMessage.className = 'system-message';
-                connectionMessage.textContent = 'Connected to chat room!';
-                messageContainer.appendChild(connectionMessage);
-            }, function(error) {
-                console.error('Error connecting to WebSocket:', error);
-                const messageContainer = document.getElementById('messageContainer');
-                const errorMessage = document.createElement('div');
-                errorMessage.className = 'system-message error';
-                errorMessage.textContent = 'Failed to connect. Please refresh the page to try again.';
-                messageContainer.appendChild(errorMessage);
-            });
-        }
-        
-        // Send message function
-        function sendMessage(event) {
-            event.preventDefault();
-            const messageInput = document.getElementById('messageInput');
-            const messageContent = messageInput.value.trim();
-            
-            if (messageContent) {
-                const chatMessage = {
-                    chatCode: chatCode,
-                    sender: currentUsername,
-                    content: messageContent
-                };
-                stompClient.send("/app/chat.sendMessage", {}, JSON.stringify(chatMessage));
-                messageInput.value = '';
             }
-        }
-        
-        // Display message in the UI
-        function showMessage(message) {
-            const messageContainer = document.getElementById('messageContainer');
-            const messageElement = document.createElement('div');
             
-            const isCurrentUser = message.sender === currentUsername;
-            messageElement.className = isCurrentUser ? 'message self' : 'message other';
+            // Disconnect from WebSocket
+            function disconnect() {
+                if (stompClient !== null) {
+                    stompClient.disconnect();
+                }
+                console.log("Disconnected");
+            }
             
-            const messageContent = document.createElement('div');
-            messageContent.className = 'message-content';
+            // Send message
+            function sendMessage() {
+                const messageContent = messageInput.value.trim();
+                if (messageContent) {
+                    const chatMessage = {
+                        chatCode: chatCode,
+                        sender: username,
+                        content: messageContent
+                    };
+                    
+                    stompClient.send("/app/chat.sendMessage", {}, JSON.stringify(chatMessage));
+                    messageInput.value = '';
+                }
+            }
             
-            const senderElement = document.createElement('div');
-            senderElement.className = 'message-sender';
-            senderElement.textContent = isCurrentUser ? 'You' : message.sender;
+            // Display message
+            function displayMessage(message) {
+                const messageElement = document.createElement('div');
+                messageElement.classList.add('message');
+                
+                if (message.sender === username) {
+                    messageElement.classList.add('sent');
+                } else {
+                    messageElement.classList.add('received');
+                }
+                
+                const senderElement = document.createElement('div');
+                senderElement.classList.add('message-sender');
+                senderElement.textContent = message.sender;
+                
+                const contentElement = document.createElement('div');
+                contentElement.classList.add('message-content');
+                contentElement.textContent = message.content;
+                
+                messageElement.appendChild(senderElement);
+                messageElement.appendChild(contentElement);
+                
+                messageArea.appendChild(messageElement);
+                scrollToBottom();
+            }
             
-            const textElement = document.createElement('div');
-            textElement.className = 'message-text';
-            textElement.textContent = message.content;
+            // Add system message
+            function addSystemMessage(text) {
+                const messageElement = document.createElement('div');
+                messageElement.classList.add('message', 'system-message');
+                messageElement.textContent = text;
+                
+                messageArea.appendChild(messageElement);
+                scrollToBottom();
+            }
             
-            messageContent.appendChild(senderElement);
-            messageContent.appendChild(textElement);
-            messageElement.appendChild(messageContent);
-            messageContainer.appendChild(messageElement);
+            // Scroll to bottom of message area
+            function scrollToBottom() {
+                messageArea.scrollTop = messageArea.scrollHeight;
+            }
             
-            // Scroll to the bottom
-            messageContainer.scrollTop = messageContainer.scrollHeight;
-        }
-        
-        // Initialize on page load
-        window.onload = function() {
-            connect();
-            document.getElementById('messageForm').addEventListener('submit', sendMessage);
-        };
+            // Leave chat
+            function leaveChat() {
+                fetch(`/api/chat/${chatId}/leave`, {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.text();
+                })
+                .then(data => {
+                    // Disconnect from WebSocket
+                    disconnect();
+                    // Redirect to dashboard
+                    window.location.href = '/chats';
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Failed to leave chat. Please try again.');
+                });
+            }
+            
+            // Event listeners
+            messageForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                sendMessage();
+            });
+            
+            if (leaveChatBtn) {
+                leaveChatBtn.addEventListener('click', function() {
+                    leaveConfirmModal.style.display = 'flex';
+                });
+            }
+            
+            confirmLeave.addEventListener('click', function() {
+                leaveChat();
+            });
+            
+            cancelLeave.addEventListener('click', function() {
+                leaveConfirmModal.style.display = 'none';
+            });
+            
+            // Handle window events
+            window.addEventListener('load', function() {
+                connect();
+            });
+            
+            window.addEventListener('beforeunload', function() {
+                disconnect();
+            });
+        });
     </script>
 </body>
 </html>

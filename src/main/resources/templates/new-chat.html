@@ -1,49 +1,71 @@
-<!-- src/main/resources/templates/new-chat.html -->
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" 
-      th:replace="~{layout/main :: layout(~{::title}, ~{::section})}">
+<html xmlns:th="http://www.thymeleaf.org">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Create New Chat - ChattyBuddies</title>
+    <link rel="stylesheet" th:href="@{/css/styles.css}">
 </head>
 <body>
-    <section class="form-page">
-        <h2>Create New Chat</h2>
-        <form id="createChatForm" class="standard-form">
-            <div class="form-group">
-                <label for="chatName">Chat Name</label>
-                <input type="text" id="chatName" name="chatName" required>
+    <div class="app-container">
+        <header>
+            <h1>ChattyBuddies</h1>
+            <div class="user-menu">
+                <span th:text="${#authentication.name}"></span>
+                <a th:href="@{/logout}" class="btn btn-logout">Logout</a>
             </div>
-            <div class="form-actions">
-                <a th:href="@{/chats}" class="btn secondary">Cancel</a>
-                <button type="submit" class="btn primary">Create Chat</button>
+        </header>
+        
+        <div class="content-wrapper">
+            <div class="back-link">
+                <a th:href="@{/chats}">&larr; Back to Dashboard</a>
             </div>
-        </form>
-    </section>
+            
+            <div class="form-container">
+                <h2>Create New Chat Room</h2>
+                
+                <form id="createChatForm">
+                    <div class="form-group">
+                        <label for="chatName">Chat Name</label>
+                        <input type="text" id="chatName" name="chatName" required>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">Create Chat</button>
+                </form>
+            </div>
+        </div>
+    </div>
     
     <script>
-        document.getElementById('createChatForm').addEventListener('submit', function(e) {
-            e.preventDefault();
+        document.addEventListener('DOMContentLoaded', function() {
+            const createChatForm = document.getElementById('createChatForm');
             
-            const chatName = document.getElementById('chatName').value;
-            
-            fetch('/api/chat/create?chatName=' + encodeURIComponent(chatName), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Failed to create chat');
-                }
-                return response.json();
-            })
-            .then(data => {
-                window.location.href = '/chats/' + data.chatCode;
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Failed to create chat. Please try again.');
+            createChatForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const chatName = document.getElementById('chatName').value;
+                
+                fetch('/api/chat/create?chatName=' + encodeURIComponent(chatName), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // Redirect to the new chat room
+                    window.location.href = '/chats/' + data.chatCode;
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Failed to create chat. Please try again.');
+                });
             });
         });
     </script>
