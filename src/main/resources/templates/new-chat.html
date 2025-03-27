@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Create New Chat - ChattyBuddies</title>
     <link rel="stylesheet" th:href="@{/css/styles.css}">
+
+    <meta name="_csrf" th:content="${_csrf.token}"/>
+    <meta name="_csrf_header" th:content="${_csrf.headerName}"/>
 </head>
 <body>
     <div class="app-container">
@@ -38,36 +41,68 @@
     
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const createChatForm = document.getElementById('createChatForm');
+    const createChatForm = document.getElementById('createChatForm');
+    
+    createChatForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const chatName = document.getElementById('chatName').value;
+        
+        // Validate chat name
+        if (!chatName || chatName.trim().length < 3) {
+            alert('Chat name must be at least 3 characters long');
+            return;
+        }
+        
+        // Get CSRF token from meta tag
+        const csrfToken = document.querySelector('meta[name="_csrf"]')?.getAttribute('content');
+        const csrfHeader = document.querySelector('meta[name="_csrf_header"]')?.getAttribute('content');
+        
+        const headers = {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        };
+        
+        // Add CSRF token to headers if it exists
+        if (csrfToken && csrfHeader) {
+            headers[csrfHeader] = csrfToken;
+        }
+        
+        fetch('/api/chat/create?chatName=' + encodeURIComponent(chatName), {
+            method: 'POST',
+            headers: headers,
+            credentials: 'same-origin'
+        })
+        .then(response => {
+            // Log the raw response for debugging
+            console.log('Response status:', response.status);
             
-            createChatForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                
-                const chatName = document.getElementById('chatName').value;
-                
-                fetch('/api/chat/create?chatName=' + encodeURIComponent(chatName), {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    // Redirect to the new chat room
-                    window.location.href = '/chats/' + data.chatCode;
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Failed to create chat. Please try again.');
+            // Check for error status
+            if (!response.ok) {
+                return response.text().then(errorText => {
+                    console.error('Error response:', errorText);
+                    throw new Error(errorText || 'Failed to create chat');
                 });
-            });
+            }
+            
+            // Try to parse JSON
+            return response.json();
+        })
+        .then(data => {
+            // Validate the response
+            if (!data.chatCode) {
+                throw new Error('Invalid response: Missing chat code');
+            }
+            
+            // Redirect to the new chat room
+            window.location.href = '/chats/' + data.chatCode;
+        })
+        .catch(error => {
+            console.error('Complete error:', error);
+            alert('Failed to create chat. Error: ' + error.message);
         });
+    });
+});
     </script>
 </body>
 </html>

@@ -44,8 +44,12 @@ public class ChatController {
         members.add(host);
         chat.setMembers(members);
         chatRepository.save(chat);
+
+        Map<String, String> response = new HashMap<>();
+        response.put("chatCode", chat.getChatCode());
+        response.put("chatName", chat.getChatName());
         
-        return ResponseEntity.status(HttpStatus.CREATED).body(chat);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     // Update chat name (host only)
